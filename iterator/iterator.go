@@ -44,15 +44,7 @@ func MakeSentencesFromDatabaseRows(ctx context.Context, db *sql.DB, table string
 		return out, fmt.Errorf("MakeSentencesFromDatabaseRows: error occurred while querying db: %v", err)
 	}
 
-	var makeSentence workerFunc[sentenceResult] = func(ctx context.Context, in dbResult) sentenceResult {
-		time.Sleep(time.Millisecond * 500) // emulate a longer running process
-		return sentenceResult{
-			err:      in.err,
-			sentence: fmt.Sprintf("This is %s, they are %d years old", in.name, in.age),
-		}
-	}
-
-	dbStream := genDataChansFromRows(ctx, rows, itOps.MaxBufferSize)
+	dbStream := genDataChansFromRows(ctx, rows, itOps.MaxBufferSize, dbResultBinder)
 	chanStream := fanOut(ctx, dbStream, itOps.MaxProcesses, makeSentence)
 	stream := fanIn(ctx, chanStream)
 	for item := range stream {
@@ -63,4 +55,19 @@ func MakeSentencesFromDatabaseRows(ctx context.Context, db *sql.DB, table string
 	}
 
 	return out, nil
+}
+
+var makeSentence workerFunc[sentenceResult] = func(ctx context.Context, in dbResult) sentenceResult {
+	time.Sleep(time.Millisecond * 500) // emulate a longer running process
+	return sentenceResult{
+		err:      in.err,
+		sentence: fmt.Sprintf("This is %s, they are %d years old", in.name, in.age),
+	}
+}
+
+var dbResultBinder customBinder[dbResult] = func(rows *sql.Rows) dbResult {
+	d := dbResult{}
+	d.err = rows.Scan(&d.name, &d.age)
+
+	return d
 }
