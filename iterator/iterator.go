@@ -20,7 +20,22 @@ type sentenceResult struct {
 
 // I've forgone my normal TDD ways to get this idea down as quickly as possible.
 
-func MakeSentencesFromDatabaseRows(db *sql.DB, table string) ([]string, error) {
+type IteratorOptions struct {
+	MaxBufferSize, MaxProcesses int
+}
+
+type Option func(*IteratorOptions)
+
+func MakeSentencesFromDatabaseRows(ctx context.Context, db *sql.DB, table string, options ...Option) ([]string, error) {
+	itOps := IteratorOptions{
+		MaxBufferSize: 12, // we can control how many rows to process at a time via the buffer size
+		MaxProcesses:  12,
+	}
+
+	for _, opt := range options {
+		opt(&itOps)
+	}
+
 	out := make([]string, 0)
 
 	query := `SELECT firstname, age FROM ` + table
@@ -37,11 +52,8 @@ func MakeSentencesFromDatabaseRows(db *sql.DB, table string) ([]string, error) {
 		}
 	}
 
-	maxBufferSize := 12 // we can control how many rows to process at a time via the buffer size
-	maxProcesses := 12
-	ctx := context.Background()
-	dbStream := genDataChansFromRows(rows, maxBufferSize)
-	chanStream := fanOut(ctx, dbStream, maxProcesses, makeSentence)
+	dbStream := genDataChansFromRows(ctx, rows, itOps.MaxBufferSize)
+	chanStream := fanOut(ctx, dbStream, itOps.MaxProcesses, makeSentence)
 	stream := fanIn(ctx, chanStream)
 	for item := range stream {
 		if item.err != nil {

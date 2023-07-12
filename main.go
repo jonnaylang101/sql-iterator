@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -55,7 +56,8 @@ func run() error {
 		return err
 	}
 
-	sentences, err := iterator.MakeSentencesFromDatabaseRows(db, table)
+	ctx := context.Background()
+	sentences, err := iterator.MakeSentencesFromDatabaseRows(ctx, db, table, setMaxBufferSize(20))
 	if err != nil {
 		return err
 	}
@@ -74,4 +76,10 @@ func Mustenv(ev string) (string, error) {
 	}
 
 	return t, nil
+}
+
+func setMaxBufferSize(s int) iterator.Option {
+	return func(io *iterator.IteratorOptions) {
+		io.MaxBufferSize = s
+	}
 }
