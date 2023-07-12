@@ -5,8 +5,8 @@ import (
 	"database/sql"
 )
 
-func genDataChansFromRows(ctx context.Context, rows *sql.Rows, bufferSize int) <-chan dbResult {
-	outStream := make(chan dbResult, bufferSize)
+func genDataChansFromRows[R any](ctx context.Context, rows *sql.Rows, bufferSize int, binder customBinder[R]) <-chan R {
+	outStream := make(chan R, bufferSize)
 
 	go func() {
 		defer close(outStream)
@@ -14,15 +14,8 @@ func genDataChansFromRows(ctx context.Context, rows *sql.Rows, bufferSize int) <
 		select {
 		case <-ctx.Done():
 		default:
-			var name string
-			var age int
 			for rows.Next() {
-				err := rows.Scan(&name, &age)
-				outStream <- dbResult{
-					name: name,
-					age:  age,
-					err:  err,
-				}
+				outStream <- binder(rows)
 			}
 		}
 	}()
