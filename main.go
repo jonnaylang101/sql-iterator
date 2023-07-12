@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 
@@ -9,6 +10,57 @@ import (
 	"github.com/jonnaylang101/sql-iterator/database"
 	"github.com/jonnaylang101/sql-iterator/iterator"
 )
+
+var (
+	db    *sql.DB
+	table string
+)
+
+func init() {
+	cfg := database.DbConfig{}
+	var err error
+	cfg.Host, err = Mustenv("HOST")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	cfg.Port, err = Mustenv("PORT")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	cfg.DbName, err = Mustenv("DB_NAME")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	cfg.User, err = Mustenv("USER")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	cfg.Password, err = Mustenv("PASSWORD")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	table, err = Mustenv("TABLE")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	db, err = database.New(cfg)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -18,44 +70,6 @@ func main() {
 }
 
 func run() error {
-	var err error
-
-	cfg := database.DbConfig{}
-	cfg.Host, err = Mustenv("HOST")
-	if err != nil {
-		return err
-	}
-
-	cfg.Port, err = Mustenv("PORT")
-	if err != nil {
-		return err
-	}
-
-	cfg.DbName, err = Mustenv("DB_NAME")
-	if err != nil {
-		return err
-	}
-
-	cfg.User, err = Mustenv("USER")
-	if err != nil {
-		return err
-	}
-
-	cfg.Password, err = Mustenv("PASSWORD")
-	if err != nil {
-		return err
-	}
-
-	db, err := database.New(cfg)
-	if err != nil {
-		return err
-	}
-
-	table, err := Mustenv("TABLE")
-	if err != nil {
-		return err
-	}
-
 	ctx := context.Background()
 	sentences, err := iterator.MakeSentencesFromDatabaseRows(ctx, db, table, setMaxBufferSize(20))
 	if err != nil {
