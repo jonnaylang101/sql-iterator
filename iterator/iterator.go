@@ -2,8 +2,6 @@ package iterator
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 )
 
 type Iterator[T, R any] interface {
@@ -11,12 +9,16 @@ type Iterator[T, R any] interface {
 }
 
 type rowIterator[T, R any] struct {
-	db     *sql.DB
+	db     Database[T]
 	table  string
 	result []R
 }
 
-func New[T, R any](db *sql.DB, table string) Iterator[T, R] {
+type Database[T any] interface {
+	Query(context.Context, string) (<-chan T, error)
+}
+
+func New[T, R any](db Database[T], table string) Iterator[T, R] {
 	return &rowIterator[T, R]{
 		db:    db,
 		table: table,
@@ -33,12 +35,11 @@ func (ri *rowIterator[T, R]) Iterate(ctx context.Context, query string, binder C
 		opt(&itOps)
 	}
 
-	rows, err := ri.db.Query(query)
+	dbStream, err := ri.db.Query(ctx, query)
 	if err != nil {
-		return ri.result, fmt.Errorf("MakeSentencesFromDatabaseRows: error occurred while querying db: %v", err)
+		return nil, err
 	}
 
-	dbStream := genDataChansFromRows[T](ctx, rows, itOps.MaxBufferSize, binder)
 	chanStream := fanOut[T, R](ctx, dbStream, itOps.MaxProcesses, worker)
 	stream := fanIn(ctx, chanStream)
 	for item := range stream {

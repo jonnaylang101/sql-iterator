@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	db    *sql.DB
+	db    database.Database[DbResult]
 	table string
 )
 
@@ -67,7 +67,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	db, err = database.New(cfg)
+	db, err = database.NewDB(cfg, DbResultBinder, 20)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
