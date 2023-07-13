@@ -39,8 +39,7 @@ func main() {
     // init the iterator with the types you wish to use
     itr := iterator.New[rowData, resData](db, table)
 
-    // create a query that works with your CustomBinder function by matching columns to fields in the order you
-    // want to scan them
+    // create a query that works with your CustomBinder function by matching columns to fields as you wish to scan them.
     query := `SELECT name FROM ` + table
 
     // perform the iteration
