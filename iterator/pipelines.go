@@ -5,7 +5,10 @@ import (
 	"database/sql"
 )
 
-func genDataChansFromRows[R any](ctx context.Context, rows *sql.Rows, bufferSize int, binder customBinder[R]) <-chan R {
+// CustomBinder enables us to bind db rows to a type of our choice
+type CustomBinder[R any] func(rows *sql.Rows) R
+
+func genDataChansFromRows[R any](ctx context.Context, rows *sql.Rows, bufferSize int, binder CustomBinder[R]) <-chan R {
 	outStream := make(chan R, bufferSize)
 
 	go func() {
@@ -23,9 +26,10 @@ func genDataChansFromRows[R any](ctx context.Context, rows *sql.Rows, bufferSize
 	return outStream
 }
 
-type workerFunc[Arg, Res any] func(ctx context.Context, in Arg) Res
+// WorkerFunc processes the data
+type WorkerFunc[Arg, Res any] func(ctx context.Context, in Arg) Res
 
-func fanOut[T, O any](ctx context.Context, inStream <-chan T, maxProcs int, worker workerFunc[T, O]) <-chan <-chan O {
+func fanOut[T, O any](ctx context.Context, inStream <-chan T, maxProcs int, worker WorkerFunc[T, O]) <-chan <-chan O {
 	chanStream := make(chan (<-chan O), maxProcs)
 	if inStream == nil || worker == nil {
 		close(chanStream)
@@ -47,7 +51,7 @@ func fanOut[T, O any](ctx context.Context, inStream <-chan T, maxProcs int, work
 	return chanStream
 }
 
-func workerThread[In, Out any](ctx context.Context, inStream <-chan In, workerFunc workerFunc[In, Out]) <-chan Out {
+func workerThread[In, Out any](ctx context.Context, inStream <-chan In, workerFunc WorkerFunc[In, Out]) <-chan Out {
 	resStream := make(chan Out)
 	if inStream == nil {
 		close(resStream)
