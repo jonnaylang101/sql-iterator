@@ -2,29 +2,7 @@ package iterator
 
 import (
 	"context"
-	"database/sql"
 )
-
-// CustomBinder enables us to bind db rows to a type of our choice
-type CustomBinder[R any] func(rows *sql.Rows) R
-
-func genDataChansFromRows[R any](ctx context.Context, rows *sql.Rows, bufferSize int, binder CustomBinder[R]) <-chan R {
-	outStream := make(chan R, bufferSize)
-
-	go func() {
-		defer close(outStream)
-
-		select {
-		case <-ctx.Done():
-		default:
-			for rows.Next() {
-				outStream <- binder(rows)
-			}
-		}
-	}()
-
-	return outStream
-}
 
 // WorkerFunc processes the data
 type WorkerFunc[Arg, Res any] func(ctx context.Context, in Arg) Res

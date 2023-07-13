@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/jonnaylang101/sql-iterator/iterator"
 )
 
 type DbConfig struct {
@@ -25,10 +24,13 @@ type Database[T any] interface {
 type database[T any] struct {
 	sql          *sql.DB
 	bufferSize   int
-	customBinder iterator.CustomBinder[T]
+	customBinder CustomBinder[T]
 }
 
-func NewDB[T any](cfg DbConfig, binder iterator.CustomBinder[T], bufferSize int) (Database[T], error) {
+// CustomBinder enables us to bind db rows to a type of our choice
+type CustomBinder[R any] func(rows *sql.Rows) R
+
+func NewDB[T any](cfg DbConfig, binder CustomBinder[T], bufferSize int) (Database[T], error) {
 	sql, err := sql.Open("mysql", cfg.CreateConnectionString())
 	if err != nil {
 		return &database[T]{}, fmt.Errorf("database.New: error occurred whild initializing the database: %v", err)
@@ -51,7 +53,7 @@ func (db *database[T]) Query(ctx context.Context, qString string) (<-chan T, err
 }
 
 // this is a copy for now until this idea is tested
-func genDataChansFromRows[R any](ctx context.Context, rows *sql.Rows, bufferSize int, binder iterator.CustomBinder[R]) <-chan R {
+func genDataChansFromRows[R any](ctx context.Context, rows *sql.Rows, bufferSize int, binder CustomBinder[R]) <-chan R {
 	outStream := make(chan R, bufferSize)
 
 	go func() {

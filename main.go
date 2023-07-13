@@ -87,7 +87,7 @@ func run() error {
 	itr := iterator.New[DbResult, SentenceResult](db, table)
 
 	query := `SELECT firstname, age FROM ` + table
-	sentences, err := itr.Iterate(ctx, query, DbResultBinder, SentenceWorker, setMaxBufferSize(20))
+	sentences, err := itr.Iterate(ctx, query, SentenceWorker)
 	if err != nil {
 		return err
 	}
@@ -112,13 +112,7 @@ func Mustenv(ev string) (string, error) {
 	return t, nil
 }
 
-func setMaxBufferSize(s int) iterator.Option {
-	return func(io *iterator.IteratorOptions) {
-		io.MaxBufferSize = s
-	}
-}
-
-var DbResultBinder iterator.CustomBinder[DbResult] = func(rows *sql.Rows) DbResult {
+var DbResultBinder database.CustomBinder[DbResult] = func(rows *sql.Rows) DbResult {
 	d := DbResult{}
 	d.Err = rows.Scan(&d.Name, &d.Age)
 

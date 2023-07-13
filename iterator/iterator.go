@@ -5,7 +5,7 @@ import (
 )
 
 type Iterator[T, R any] interface {
-	Iterate(ctx context.Context, query string, binder CustomBinder[T], worker WorkerFunc[T, R], options ...Option) ([]R, error)
+	Iterate(ctx context.Context, query string, worker WorkerFunc[T, R], options ...Option) ([]R, error)
 }
 
 type rowIterator[T, R any] struct {
@@ -25,10 +25,9 @@ func New[T, R any](db Database[T], table string) Iterator[T, R] {
 	}
 }
 
-func (ri *rowIterator[T, R]) Iterate(ctx context.Context, query string, binder CustomBinder[T], worker WorkerFunc[T, R], options ...Option) ([]R, error) {
+func (ri *rowIterator[T, R]) Iterate(ctx context.Context, query string, worker WorkerFunc[T, R], options ...Option) ([]R, error) {
 	itOps := IteratorOptions{
-		MaxBufferSize: 12, // we can control how many rows to process at a time via the buffer size
-		MaxProcesses:  12,
+		MaxProcesses: 12,
 	}
 
 	for _, opt := range options {
@@ -50,7 +49,7 @@ func (ri *rowIterator[T, R]) Iterate(ctx context.Context, query string, binder C
 }
 
 type IteratorOptions struct {
-	MaxBufferSize, MaxProcesses int
+	MaxProcesses int
 }
 
 type Option func(*IteratorOptions)
