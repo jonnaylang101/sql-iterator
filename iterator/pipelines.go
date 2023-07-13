@@ -23,9 +23,9 @@ func genDataChansFromRows[R any](ctx context.Context, rows *sql.Rows, bufferSize
 	return outStream
 }
 
-type workerFunc[Res any] func(ctx context.Context, in dbResult) Res
+type workerFunc[Arg, Res any] func(ctx context.Context, in Arg) Res
 
-func fanOut[O any](ctx context.Context, inStream <-chan dbResult, maxProcs int, worker workerFunc[O]) <-chan <-chan O {
+func fanOut[T, O any](ctx context.Context, inStream <-chan T, maxProcs int, worker workerFunc[T, O]) <-chan <-chan O {
 	chanStream := make(chan (<-chan O), maxProcs)
 	if inStream == nil || worker == nil {
 		close(chanStream)
@@ -47,7 +47,7 @@ func fanOut[O any](ctx context.Context, inStream <-chan dbResult, maxProcs int, 
 	return chanStream
 }
 
-func workerThread[Out any](ctx context.Context, inStream <-chan dbResult, workerFunc workerFunc[Out]) <-chan Out {
+func workerThread[In, Out any](ctx context.Context, inStream <-chan In, workerFunc workerFunc[In, Out]) <-chan Out {
 	resStream := make(chan Out)
 	if inStream == nil {
 		close(resStream)

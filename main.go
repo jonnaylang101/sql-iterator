@@ -71,13 +71,21 @@ func main() {
 
 func run() error {
 	ctx := context.Background()
-	sentences, err := iterator.MakeSentencesFromDatabaseRows(ctx, db, table, setMaxBufferSize(20))
+
+	itr := iterator.New[iterator.DbResult, iterator.SentenceResult](db, table)
+
+	query := `SELECT firstname, age FROM ` + table
+	sentences, err := itr.Iterate(ctx, query, iterator.DbResultBinder, iterator.SentenceWorker, setMaxBufferSize(20))
 	if err != nil {
 		return err
 	}
 
 	for _, sen := range sentences {
-		fmt.Println(sen)
+		if sen.Err != nil {
+			return sen.Err
+		}
+
+		fmt.Println(sen.Sentence)
 	}
 
 	return nil

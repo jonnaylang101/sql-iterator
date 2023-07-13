@@ -7,26 +7,24 @@ import (
 	"time"
 )
 
-type dbResult struct {
-	name string
-	age  int
-	err  error
+type Iterator[T, R any] interface {
+	Iterate(ctx context.Context, query string, binder customBinder[T], worker workerFunc[T, R], options ...Option) ([]R, error)
 }
 
-type sentenceResult struct {
-	sentence string
-	err      error
+type rowIterator[T, R any] struct {
+	db     *sql.DB
+	table  string
+	result []R
 }
 
-// I've forgone my normal TDD ways to get this idea down as quickly as possible.
-
-type IteratorOptions struct {
-	MaxBufferSize, MaxProcesses int
+func New[T, R any](db *sql.DB, table string) Iterator[T, R] {
+	return &rowIterator[T, R]{
+		db:    db,
+		table: table,
+	}
 }
 
-type Option func(*IteratorOptions)
-
-func MakeSentencesFromDatabaseRows(ctx context.Context, db *sql.DB, table string, options ...Option) ([]string, error) {
+func (ri *rowIterator[T, R]) Iterate(ctx context.Context, query string, binder customBinder[T], worker workerFunc[T, R], options ...Option) ([]R, error) {
 	itOps := IteratorOptions{
 		MaxBufferSize: 12, // we can control how many rows to process at a time via the buffer size
 		MaxProcesses:  12,
@@ -36,38 +34,49 @@ func MakeSentencesFromDatabaseRows(ctx context.Context, db *sql.DB, table string
 		opt(&itOps)
 	}
 
-	out := make([]string, 0)
-
-	query := `SELECT firstname, age FROM ` + table
-	rows, err := db.Query(query)
+	rows, err := ri.db.Query(query)
 	if err != nil {
-		return out, fmt.Errorf("MakeSentencesFromDatabaseRows: error occurred while querying db: %v", err)
+		return ri.result, fmt.Errorf("MakeSentencesFromDatabaseRows: error occurred while querying db: %v", err)
 	}
 
-	dbStream := genDataChansFromRows(ctx, rows, itOps.MaxBufferSize, dbResultBinder)
-	chanStream := fanOut(ctx, dbStream, itOps.MaxProcesses, makeSentence)
+	dbStream := genDataChansFromRows[T](ctx, rows, itOps.MaxBufferSize, binder)
+	chanStream := fanOut[T, R](ctx, dbStream, itOps.MaxProcesses, worker)
 	stream := fanIn(ctx, chanStream)
 	for item := range stream {
-		if item.err != nil {
-			return out, fmt.Errorf("MakeSentencesFromDatabaseRows: error occurred while parsing rows: %v", err)
-		}
-		out = append(out, item.sentence)
+		ri.result = append(ri.result, item)
 	}
 
-	return out, nil
+	return ri.result, nil
 }
 
-var makeSentence workerFunc[sentenceResult] = func(ctx context.Context, in dbResult) sentenceResult {
-	time.Sleep(time.Millisecond * 500) // emulate a longer running process
-	return sentenceResult{
-		err:      in.err,
-		sentence: fmt.Sprintf("This is %s, they are %d years old", in.name, in.age),
-	}
+type DbResult struct {
+	Name string
+	Age  int
+	Err  error
 }
 
-var dbResultBinder customBinder[dbResult] = func(rows *sql.Rows) dbResult {
-	d := dbResult{}
-	d.err = rows.Scan(&d.name, &d.age)
+type SentenceResult struct {
+	Sentence string
+	Err      error
+}
+
+type IteratorOptions struct {
+	MaxBufferSize, MaxProcesses int
+}
+
+type Option func(*IteratorOptions)
+
+var DbResultBinder customBinder[DbResult] = func(rows *sql.Rows) DbResult {
+	d := DbResult{}
+	d.Err = rows.Scan(&d.Name, &d.Age)
 
 	return d
+}
+
+var SentenceWorker workerFunc[DbResult, SentenceResult] = func(ctx context.Context, in DbResult) SentenceResult {
+	time.Sleep(time.Millisecond * 500) // emulate a longer running process
+	return SentenceResult{
+		Err:      in.Err,
+		Sentence: fmt.Sprintf("This is %s, they are %d years old", in.Name, in.Age),
+	}
 }
