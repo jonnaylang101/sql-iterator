@@ -4,11 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 )
 
 type Iterator[T, R any] interface {
-	Iterate(ctx context.Context, query string, binder customBinder[T], worker workerFunc[T, R], options ...Option) ([]R, error)
+	Iterate(ctx context.Context, query string, binder CustomBinder[T], worker WorkerFunc[T, R], options ...Option) ([]R, error)
 }
 
 type rowIterator[T, R any] struct {
@@ -24,7 +23,7 @@ func New[T, R any](db *sql.DB, table string) Iterator[T, R] {
 	}
 }
 
-func (ri *rowIterator[T, R]) Iterate(ctx context.Context, query string, binder customBinder[T], worker workerFunc[T, R], options ...Option) ([]R, error) {
+func (ri *rowIterator[T, R]) Iterate(ctx context.Context, query string, binder CustomBinder[T], worker WorkerFunc[T, R], options ...Option) ([]R, error) {
 	itOps := IteratorOptions{
 		MaxBufferSize: 12, // we can control how many rows to process at a time via the buffer size
 		MaxProcesses:  12,
@@ -49,34 +48,8 @@ func (ri *rowIterator[T, R]) Iterate(ctx context.Context, query string, binder c
 	return ri.result, nil
 }
 
-type DbResult struct {
-	Name string
-	Age  int
-	Err  error
-}
-
-type SentenceResult struct {
-	Sentence string
-	Err      error
-}
-
 type IteratorOptions struct {
 	MaxBufferSize, MaxProcesses int
 }
 
 type Option func(*IteratorOptions)
-
-var DbResultBinder customBinder[DbResult] = func(rows *sql.Rows) DbResult {
-	d := DbResult{}
-	d.Err = rows.Scan(&d.Name, &d.Age)
-
-	return d
-}
-
-var SentenceWorker workerFunc[DbResult, SentenceResult] = func(ctx context.Context, in DbResult) SentenceResult {
-	time.Sleep(time.Millisecond * 500) // emulate a longer running process
-	return SentenceResult{
-		Err:      in.Err,
-		Sentence: fmt.Sprintf("This is %s, they are %d years old", in.Name, in.Age),
-	}
-}

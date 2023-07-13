@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jonnaylang101/sql-iterator/database"
@@ -15,6 +16,17 @@ var (
 	db    *sql.DB
 	table string
 )
+
+type DbResult struct {
+	Name string
+	Age  int
+	Err  error
+}
+
+type SentenceResult struct {
+	Sentence string
+	Err      error
+}
 
 func init() {
 	cfg := database.DbConfig{}
@@ -72,10 +84,10 @@ func main() {
 func run() error {
 	ctx := context.Background()
 
-	itr := iterator.New[iterator.DbResult, iterator.SentenceResult](db, table)
+	itr := iterator.New[DbResult, SentenceResult](db, table)
 
 	query := `SELECT firstname, age FROM ` + table
-	sentences, err := itr.Iterate(ctx, query, iterator.DbResultBinder, iterator.SentenceWorker, setMaxBufferSize(20))
+	sentences, err := itr.Iterate(ctx, query, DbResultBinder, SentenceWorker, setMaxBufferSize(20))
 	if err != nil {
 		return err
 	}
@@ -103,5 +115,20 @@ func Mustenv(ev string) (string, error) {
 func setMaxBufferSize(s int) iterator.Option {
 	return func(io *iterator.IteratorOptions) {
 		io.MaxBufferSize = s
+	}
+}
+
+var DbResultBinder iterator.CustomBinder[DbResult] = func(rows *sql.Rows) DbResult {
+	d := DbResult{}
+	d.Err = rows.Scan(&d.Name, &d.Age)
+
+	return d
+}
+
+var SentenceWorker iterator.WorkerFunc[DbResult, SentenceResult] = func(ctx context.Context, in DbResult) SentenceResult {
+	time.Sleep(time.Millisecond * 500) // emulate a longer running process
+	return SentenceResult{
+		Err:      in.Err,
+		Sentence: fmt.Sprintf("This is %s, they are %d years old", in.Name, in.Age),
 	}
 }
